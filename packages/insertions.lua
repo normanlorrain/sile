@@ -96,7 +96,7 @@ local _pageInsertionVbox = SILE.nodefactory.newVbox({
 
 local thisPageInsertionBoxForClass = function (class)
   if not insertionsThisPage[class] then
-    local this = std.tree.clone(_pageInsertionVbox)
+    local this = pl.tablex.deepcopy(_pageInsertionVbox)
     this.frame  = SILE.scratch.insertions.classes[class].insertInto.frame
     insertionsThisPage[class] = this
   end
@@ -125,14 +125,14 @@ local _insertionVbox = SILE.nodefactory.newVbox({
     end
   end,
   split = function (self, materialToSplit, maxsize)
-    local s = SILE.pagebuilder.findBestBreak({
+    local s = SILE.pagebuilder:findBestBreak({
       vboxlist = materialToSplit,
       target   = maxsize.length,
       restart  = false,
       force    = true
     })
     if s then
-      local newvbox = SILE.pagebuilder.collateVboxes(s)
+      local newvbox = SILE.pagebuilder:collateVboxes(s)
       self.nodes = {}
       self.height = 0
       self:append(materialToSplit)
@@ -156,9 +156,9 @@ entered yet.
 
 --]]
 
-local initShrinkage = function (f)
-  if not f.state.totals then f:init() end
-  if not f.state.totals.shrinkage then f.state.totals.shrinkage = 0 end
+local initShrinkage = function (frame)
+  if not frame.state or not frame.state.totals then frame:init() end
+  if not frame.state.totals.shrinkage then frame.state.totals.shrinkage = 0 end
 end
 
 --[[ Mark a frame for reduction. --]]
@@ -223,25 +223,23 @@ local nextInterInsertionSkip = function (class)
 end
 
 local debugInsertion = function (ins, insbox, topBox, target, targetFrame, totalHeight)
-  if SU.debugging("insertions") then
-    local h = ins.contentHeight + topBox.height + topBox.depth + ins.contentDepth
-    io.stderr:write("[insertions]", "Incoming insertion")
-    io.stderr:write("top box height", topBox.height)
-    io.stderr:write("insertion", ins, ins.height, ins.depth)
-    io.stderr:write("Total incoming height", h)
-    io.stderr:write("Insertions already in this class ", insbox.height, insbox.depth)
-    io.stderr:write("Page target ", target)
-    io.stderr:write("Page frame ", targetFrame)
-    io.stderr:write(totalHeight.." worth of content on page so far")
-  end
+  local insertionsHeight = ins.contentHeight + topBox.height + topBox.depth + ins.contentDepth
+  SU.debug("insertions", "## Incoming insertion")
+  SU.debug("insertions", "Top box height", topBox.height)
+  SU.debug("insertions", "Insertion", ins, ins.height, ins.depth)
+  SU.debug("insertions", "Total incoming height", insertionsHeight)
+  SU.debug("insertions", "Insertions already in this class ", insbox.height, insbox.depth)
+  SU.debug("insertions", "Page target ", target)
+  SU.debug("insertions", "Page frame ", targetFrame)
+  SU.debug("insertions", totalHeight .. " worth of content on page so far")
 end
 
 local min = function (a, b) -- Defined funny to help Lua 5.1 compare overloaded tables
   return SILE.length.make(a).length < SILE.length.make(b).length and a or b
 end
 
-local pt = SILE.typesetter.pageTarget
-SILE.typesetter.pageTarget = function (self)
+local pt = SILE.typesetter.getTargetLength
+SILE.typesetter.getTargetLength = function (self)
   initShrinkage(self.frame)
   return pt(self) - self.frame.state.totals.shrinkage
 end
@@ -287,7 +285,9 @@ SILE.insertions.processInsertion = function (vboxlist, i, totalHeight, target)
   initShrinkage(targetFrame)
   initShrinkage(SILE.typesetter.frame)
 
-  debugInsertion(ins, insbox, topBox, target, targetFrame, totalHeight)
+  if SU.debugging("insertions") then
+    debugInsertion(ins, insbox, topBox, target, targetFrame, totalHeight)
+  end
 
   local effectOnThisFrame = options.stealFrom[SILE.typesetter.frame.id]
   if effectOnThisFrame then effectOnThisFrame = effectOnThisFrame * h.length
@@ -320,7 +320,7 @@ SILE.insertions.processInsertion = function (vboxlist, i, totalHeight, target)
   -- intend to put on this page.
   maxsize = maxsize - topBox.height
   local materialToSplit = {}
-  table.append(materialToSplit, ins:unbox())
+  pl.tablex.insertvalues(materialToSplit, ins:unbox())
   local newvbox = ins:split(materialToSplit, maxsize)
 
   if newvbox then
